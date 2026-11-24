@@ -1,6 +1,5 @@
 import time
 from collections.abc import Callable
-from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -11,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.encryption import decrypt_credentials
+from app.core.time import as_utc, utcnow
 from app.db.session import SessionLocal
 from app.integrations.base import (
     CredentialError,
@@ -183,7 +183,7 @@ def _execute(db: Session, execution_id: UUID) -> None:
         execution.error_message = "Execution attempted without an approved action"
         db.commit()
         return
-    if approval.expires_at <= datetime.utcnow():
+    if as_utc(approval.expires_at) <= utcnow():
         execution.status = "failed"
         execution.error_message = "Approval expired before execution"
         approval.status = "expired"
@@ -198,7 +198,7 @@ def _execute(db: Session, execution_id: UUID) -> None:
         response, verified = _with_retries(
             lambda: _call_adapter(db, execution, integration, action, recommendation)
         )
-        execution.executed_at = datetime.utcnow()
+        execution.executed_at = utcnow()
         if verified:
             execution.status = "verified"
             execution.error_message = None
@@ -260,7 +260,7 @@ def retry_execution(
         raise HTTPException(status_code=http_status.HTTP_409_CONFLICT, detail="Execution is already running")
 
     approval = db.scalar(select(Approval).where(Approval.id == execution.approval_id))
-    if not approval or approval.status != "approved" or approval.expires_at <= datetime.utcnow():
+    if not approval or approval.status != "approved" or as_utc(approval.expires_at) <= utcnow():
         raise HTTPException(
             status_code=http_status.HTTP_409_CONFLICT,
             detail="Execution cannot be retried without a valid approval",

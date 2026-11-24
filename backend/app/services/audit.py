@@ -1,9 +1,9 @@
-from datetime import datetime
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from app.core.time import utcnow
 from app.models.entities import AuditLog
 
 
@@ -23,7 +23,7 @@ def log_event(
         resource_type=resource_type,
         resource_id=resource_id,
         audit_metadata=metadata or {},
-        created_at=datetime.utcnow(),
+        created_at=utcnow(),
     )
     db.add(entry)
     return entry

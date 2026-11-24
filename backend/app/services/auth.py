@@ -1,11 +1,10 @@
-from datetime import datetime
-
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.encryption import encrypt_credentials
 from app.core.security import create_access_token, hash_password, verify_password
+from app.core.time import utcnow
 from app.integrations.registry import PROVIDER_METADATA
 from app.models.entities import Integration, Organization, OrganizationMember, User
 from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse
@@ -56,7 +55,7 @@ def register_user(db: Session, payload: RegisterRequest) -> TokenResponse:
                 provider=provider,
                 external_account_id=f"mock-{provider}-{organization.id.hex[:8]}",
                 encrypted_credentials=encrypt_credentials(
-                    {"mock": True, "connected_at": datetime.utcnow().isoformat()}
+                    {"mock": True, "connected_at": utcnow().isoformat()}
                 ),
                 connection_status="connected",
                 permissions=metadata["permissions"],

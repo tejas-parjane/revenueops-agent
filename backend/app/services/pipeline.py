@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.time import as_utc, utcnow
 from app.integrations.base import NormalizedLead
 from app.models.entities import Integration, Lead
 from app.schemas.leads import LeadImportRequest, LeadImportResult, LeadSchema
@@ -13,9 +14,11 @@ from app.services import audit
 
 
 def _hours_inactive(last_activity_at: datetime | None, now: datetime) -> float | None:
-    if last_activity_at is None:
+    current = as_utc(now)
+    last = as_utc(last_activity_at)
+    if current is None or last is None:
         return None
-    return max((now - last_activity_at).total_seconds() / 3600, 0.0)
+    return max((current - last).total_seconds() / 3600, 0.0)
 
 
 def _priority(deal_value: float, hours_inactive: float | None) -> str:
@@ -29,7 +32,7 @@ def _priority(deal_value: float, hours_inactive: float | None) -> str:
 
 
 def decorate_lead(lead: Lead, provider: str | None = None, now: datetime | None = None) -> Lead:
-    current = now or datetime.utcnow()
+    current = now or utcnow()
     hours = _hours_inactive(lead.last_activity_at, current)
     lead.days_inactive = round(hours / 24, 2) if hours is not None else None
     lead.priority = _priority(float(lead.deal_value or 0), hours)
@@ -53,7 +56,7 @@ def list_leads(db: Session, organization_id: UUID) -> list[Lead]:
         ).all()
     )
     providers = _provider_map(db, organization_id)
-    now = datetime.utcnow()
+    now = utcnow()
     return [
         decorate_lead(lead, providers.get(str(lead.source_integration_id)), now) for lead in leaders
     ]
@@ -92,7 +95,7 @@ def upsert_lead(
         existing.last_activity_at = row.last_activity_at
         existing.notes = row.notes
         existing.raw_data = row.raw_data
-        existing.updated_at = datetime.utcnow()
+        existing.updated_at = utcnow()
         return existing, False
 
     lead = Lead(
@@ -108,8 +111,8 @@ def upsert_lead(
         last_activity_at=row.last_activity_at,
         notes=row.notes,
         raw_data=row.raw_data,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=utcnow(),
+        updated_at=utcnow(),
     )
     db.add(lead)
     return lead, True

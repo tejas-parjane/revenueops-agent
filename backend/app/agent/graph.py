@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -9,6 +9,7 @@ from app.agent.sanitizer import contains_untrusted_instruction, public_value, sa
 from app.agent.state import AgentState
 from app.core.config import settings
 from app.core.hashing import action_hash
+from app.core.time import as_utc, utcnow
 from app.integrations.registry import provider_display_name
 from app.models.entities import AgentTask, AgentTaskEvent, Approval, Integration, Lead, Recommendation
 
@@ -26,7 +27,7 @@ def emit(
         "status": status,
         "message": message,
         "metadata": metadata or {},
-        "created_at": datetime.utcnow(),
+        "created_at": utcnow(),
     }
     events = [*state.get("events", []), event]
     db = state.get("db")
@@ -137,7 +138,7 @@ def _priority(deal_value: float, hours: float, stage: str | None) -> str:
 
 
 def investigate(state: AgentState) -> dict[str, Any]:
-    now = datetime.utcnow()
+    now = utcnow()
     findings: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
 
@@ -189,7 +190,7 @@ def investigate(state: AgentState) -> dict[str, Any]:
                 base_evidence + [{"issue": "last_activity_at is null"}],
             )
         else:
-            hours = max((now - last_activity).total_seconds() / 3600, 0.0)
+            hours = max((now - (as_utc(last_activity) or now)).total_seconds() / 3600, 0.0)
             if hours >= settings.agent_inactivity_hours:
                 priority = _priority(lead["deal_value"], hours, lead.get("stage"))
                 add_finding(
@@ -347,7 +348,7 @@ def recommend(state: AgentState) -> dict[str, Any]:
         if not lead:
             continue
         action = _create_action(finding, lead)
-        now = datetime.utcnow()
+        now = utcnow()
         recommendations.append(
             {
                 "id": str(uuid4()),
@@ -380,7 +381,7 @@ def persist(state: AgentState) -> dict[str, Any]:
         select(func.count()).select_from(Recommendation).where(Recommendation.task_id == state["task_id"])
     )
     if not existing:
-        now = datetime.utcnow()
+        now = utcnow()
         expires_at = now + timedelta(days=settings.approval_expiration_days)
         for item in state.get("recommendations", []):
             action = item["proposed_action"]
@@ -427,7 +428,7 @@ def finalize(state: AgentState) -> dict[str, Any]:
     if task:
         task.status = "completed"
         task.intent = state.get("intent")
-        task.completed_at = datetime.utcnow()
+        task.completed_at = utcnow()
         task.result = {
             "reasoning_summary": state.get("reasoning_summary", ""),
             "data_sources": state.get("data_sources", []),

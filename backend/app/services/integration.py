@@ -2,7 +2,6 @@ import base64
 import hashlib
 import hmac
 import time
-from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -12,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.encryption import decrypt_credentials, encrypt_credentials
+from app.core.time import utcnow
 from app.integrations.base import CredentialError, IntegrationError
 from app.integrations.registry import PROVIDER_METADATA, get_adapter
 from app.models.entities import Integration
@@ -74,7 +74,7 @@ def complete_connection(
     _verify_state(state, provider)
     credentials: dict[str, Any] = {
         "mock": True,
-        "connected_at": datetime.utcnow().isoformat(),
+        "connected_at": utcnow().isoformat(),
         "external_account_id": external_account_id,
     }
     integration = db.scalar(
@@ -88,7 +88,7 @@ def complete_connection(
         integration.encrypted_credentials = encrypt_credentials(credentials)
         integration.connection_status = "connected"
         integration.last_error = None
-        integration.updated_at = datetime.utcnow()
+        integration.updated_at = utcnow()
     else:
         integration = Integration(
             organization_id=organization_id,
@@ -128,7 +128,7 @@ def disconnect_integration(
     integration.connection_status = "disconnected"
     integration.encrypted_credentials = encrypt_credentials({"mock": True, "disconnected": True})
     integration.last_error = None
-    integration.updated_at = datetime.utcnow()
+    integration.updated_at = utcnow()
     audit.log_event(
         db,
         organization_id,
@@ -155,9 +155,9 @@ def sync_integration(db: Session, integration: Integration, user_id: UUID | None
         for row in rows:
             pipeline.upsert_lead(db, integration.organization_id, integration.id, row)
         integration.connection_status = "connected"
-        integration.last_synced_at = datetime.utcnow()
+        integration.last_synced_at = utcnow()
         integration.last_error = None
-        integration.updated_at = datetime.utcnow()
+        integration.updated_at = utcnow()
         audit.log_event(
             db,
             integration.organization_id,

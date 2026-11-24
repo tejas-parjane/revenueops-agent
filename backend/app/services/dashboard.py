@@ -1,9 +1,10 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 from uuid import UUID
 
 from sqlalchemy import func, select
 
 from app.core.config import settings
+from app.core.time import utcnow
 from app.integrations.registry import provider_display_name
 from app.models.entities import (
     ActionExecution,
@@ -102,7 +103,7 @@ def build_activity(db, organization_id: UUID, limit: int = 12) -> list[ActivityI
 
 
 def get_overview(db, organization_id: UUID) -> OverviewResponse:
-    now = datetime.utcnow()
+    now = utcnow()
     cutoff = now - timedelta(hours=settings.agent_inactivity_hours)
 
     active_leads = int(

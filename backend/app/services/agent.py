@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -8,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.agent.graph import build_graph
 from app.agent.state import AgentState
+from app.core.time import utcnow
 from app.db.session import SessionLocal
 from app.models.entities import AgentTask, AgentTaskEvent, Recommendation
 from app.schemas.agent import (
@@ -29,7 +29,7 @@ def create_task(db: Session, organization_id: UUID, user_id: UUID, user_request:
         status="pending",
         intent=None,
         input_data={"request": user_request},
-        created_at=datetime.utcnow(),
+        created_at=utcnow(),
     )
     db.add(task)
     db.flush()
@@ -41,7 +41,7 @@ def create_task(db: Session, organization_id: UUID, user_id: UUID, user_request:
             status="pending",
             message="Agent task queued for investigation.",
             event_metadata={},
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
     )
     audit.log_event(
@@ -179,7 +179,7 @@ def run_task_sync(task_id: str) -> None:
         if task:
             task.status = "failed"
             task.error = str(exc)
-            task.completed_at = datetime.utcnow()
+            task.completed_at = utcnow()
             db.add(
                 AgentTaskEvent(
                     organization_id=task.organization_id,
@@ -188,7 +188,7 @@ def run_task_sync(task_id: str) -> None:
                     status="failed",
                     message="Agent task failed.",
                     event_metadata={"error": str(exc)},
-                    created_at=datetime.utcnow(),
+                    created_at=utcnow(),
                 )
             )
             db.commit()

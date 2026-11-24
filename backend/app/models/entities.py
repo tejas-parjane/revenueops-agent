@@ -4,11 +4,8 @@ from uuid import UUID, uuid4
 from sqlalchemy import DateTime, ForeignKey, Index, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.core.time import utcnow
 from app.db.base import Base, JSONType
-
-
-def utcnow() -> datetime:
-    return datetime.utcnow()
 
 
 class Organization(Base):

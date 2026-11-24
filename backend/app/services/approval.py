@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -7,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.hashing import action_hash
+from app.core.time import as_utc, utcnow
 from app.models.entities import (
     ActionExecution,
     Approval,
@@ -94,7 +94,7 @@ def approve(
 
     if approval.status != "pending":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Approval is no longer pending")
-    if approval.expires_at <= datetime.utcnow():
+    if as_utc(approval.expires_at) <= utcnow():
         approval.status = "expired"
         db.commit()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Approval has expired")
@@ -149,7 +149,7 @@ def approve(
 
     approval.status = "approved"
     approval.approved_by = user_id
-    approval.approved_at = datetime.utcnow()
+    approval.approved_at = utcnow()
     approval.note = payload.note
     recommendation.status = "approved"
 
@@ -171,7 +171,7 @@ def approve(
         idempotency_key=idempotency_key,
         request_payload=action,
         status="pending",
-        created_at=datetime.utcnow(),
+        created_at=utcnow(),
     )
     db.add(execution)
     db.flush()
@@ -205,7 +205,7 @@ def reject(
     approval.status = "rejected"
     approval.reason = payload.reason
     approval.approved_by = user_id
-    approval.approved_at = datetime.utcnow()
+    approval.approved_at = utcnow()
     recommendation.status = "rejected"
     audit.log_event(
         db,
