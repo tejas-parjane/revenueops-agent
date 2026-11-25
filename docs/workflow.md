@@ -22,13 +22,13 @@ This document traces one neglected-lead follow-up from detection to verification
 
 9. **Create an idempotent execution.** `backend/app/services/approval.py:approve` creates an `ActionExecution` with key `approval:{approval_id}:{action_hash}`. If an execution with that key already exists, the existing record is returned instead of creating a duplicate.
 
-10. **Dispatch execution.** `backend/app/workers/dispatch.py:dispatch_execution` routes to `backend/app/workers/tasks.py:execute_action_task`, which calls `backend/app/services/execution.py:execute_action_sync`.
+10. **Dispatch and claim execution.** `backend/app/workers/dispatch.py:dispatch_execution` routes to `backend/app/workers/tasks.py:execute_action_task`, which calls `backend/app/services/execution.py:execute_action_sync`. `_claim_execution` atomically changes the row from `pending` or `failed` to `running`; a competing worker receives no claim and exits.
 
 11. **Execute through an adapter.** `_execute` revalidates the approval, recommendation, integration, tenant, provider, and expiry. `_call_adapter` decrypts credentials, selects a mock or live adapter through `backend/app/integrations/registry.py:get_adapter`, checks the connection, executes the action, and persists refreshed credentials when returned.
 
 12. **Verify the side effect.** Each adapter implements `verify_action`. For email, `send_email` uses a deterministic RFC822 message ID and the adapter reads the draft or sent message. For HubSpot tasks and CRM updates, the adapter reads back the created or updated resource.
 
-13. **Record the outcome.** `backend/app/services/execution.py:_execute` marks the execution `verified` or `failed`. `ExternalTimeoutError` produces `uncertain`; other errors produce `failed`. Audit events record the transition.
+13. **Record the outcome.** `backend/app/services/execution.py:_execute` marks the execution `verified` or `failed`. Rate-limit errors are retried within a bounded window; `ExternalTimeoutError` is not retried and produces `uncertain`. Other errors produce `failed`. Audit events record the transition.
 
 14. **Handle uncertainty safely.** `POST /api/v1/executions/{id}/retry` calls `backend/app/services/execution.py:retry_execution`. It first attempts `_reconcile_uncertain` using stored provider references. If reconciliation cannot confirm the action, replay requires `acknowledge_uncertain=true`.
 
@@ -57,4 +57,5 @@ This document traces one neglected-lead follow-up from detection to verification
 - `backend/tests/test_phase2_integrations.py`
 - `backend/tests/test_phase3_llm.py`
 - `backend/tests/test_integrations.py`
+- `backend/tests/test_execution_reliability.py`
 - `backend/tests/test_evals.py`

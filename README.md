@@ -101,7 +101,7 @@ python -m ruff check .
 python -m pytest -q
 ```
 
-Verified result: `All checks passed!` and `26 passed, 1 skipped`. The skipped test is the opt-in live LLM evaluation.
+Verified result: `All checks passed!` and `30 passed, 1 skipped`. The skipped test is the opt-in live LLM evaluation.
 
 From `frontend/`:
 

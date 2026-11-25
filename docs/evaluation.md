@@ -17,7 +17,7 @@ To run only the evaluation cases:
 python -m pytest -q tests/test_evals.py
 ```
 
-Verified result: `26 passed, 1 skipped`. The skipped case is the opt-in live LLM evaluation.
+Verified result: `30 passed, 1 skipped`. The skipped case is the opt-in live LLM evaluation.
 
 ## Cases
 

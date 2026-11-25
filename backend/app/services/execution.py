@@ -5,7 +5,7 @@ from uuid import UUID
 
 from fastapi import HTTPException
 from fastapi import status as http_status
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -74,11 +74,24 @@ def _with_retries(operation: Callable[[], Any]) -> Any:
     for attempt in range(attempts):
         try:
             return operation()
-        except (RateLimitError, ExternalTimeoutError):
+        except RateLimitError:
             if attempt == attempts - 1:
                 raise
             time.sleep(settings.execution_retry_delay_seconds * (2**attempt))
     raise ExternalAPIError("Execution failed after bounded retries")
+
+
+def _claim_execution(db: Session, execution_id: UUID) -> bool:
+    result = db.execute(
+        update(ActionExecution)
+        .where(
+            ActionExecution.id == execution_id,
+            ActionExecution.status.in_({"pending", "failed"}),
+        )
+        .values(status="running")
+    )
+    db.commit()
+    return result.rowcount == 1
 
 
 def _credentials(db: Session, integration: Integration) -> dict[str, Any]:
@@ -189,8 +202,10 @@ def _call_adapter(
 
 
 def _execute(db: Session, execution_id: UUID) -> None:
+    if not _claim_execution(db, execution_id):
+        return
     execution = db.scalar(select(ActionExecution).where(ActionExecution.id == execution_id))
-    if not execution or execution.status in {"verified", "running", "uncertain"}:
+    if not execution:
         return
 
     approval = db.scalar(
@@ -232,9 +247,6 @@ def _execute(db: Session, execution_id: UUID) -> None:
         approval.status = "expired"
         db.commit()
         return
-
-    execution.status = "running"
-    db.commit()
 
     action = execution.request_payload or {}
     try:

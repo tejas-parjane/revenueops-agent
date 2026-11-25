@@ -23,6 +23,7 @@ This repository is a credible engineering demonstration, not a claim of full pro
 - A Celery worker definition exists, but the demo Render free plan does not support deploying it.
 - Production uses `CELERY_TASK_ALWAYS_EAGER=false`, so queued executions require a running worker.
 - Local Docker Compose includes a worker and is the recommended way to demonstrate queued execution.
+- Bounded retries apply to rate limits only; ambiguous write timeouts become `uncertain` and require reconciliation before replay.
 - Git auto-connect is not configured for the demo frontend; deployments are managed explicitly.
 
 ## Scope not yet implemented

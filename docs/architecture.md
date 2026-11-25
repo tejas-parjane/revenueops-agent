@@ -59,6 +59,8 @@ flowchart LR
 - Action payloads are validated before approval, before execution, and during uncertain reconciliation.
 - Approval edits cannot change provider, action type, target, lead, external ID, risk, or protected CRM fields.
 - OAuth callback state is random, hashed at rest, expiring, single-use, and bound to the initiating user and redirect.
+- Execution claiming is an atomic conditional update from `pending` or `failed` to `running`, so competing workers cannot execute the same record.
+- Only rate limits are retried; an ambiguous write timeout is marked `uncertain` instead of being replayed automatically.
 - External operations are verified after execution when the provider returns a reference.
 - Uncertain executions are reconciled from stored references before replay and require explicit acknowledgement when unresolved.
 

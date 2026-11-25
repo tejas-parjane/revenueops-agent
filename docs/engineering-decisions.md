@@ -24,7 +24,7 @@ Trade-off: approval adds a human step, but it creates a clear accountability bou
 
 Adapters add provider-side idempotency where possible: Gmail uses a deterministic RFC822 message ID, HubSpot checks for existing tasks by idempotency key, and Sheets checks for matching keys before appending or updating.
 
-Ambiguous timeouts do not automatically replay. They mark the execution `uncertain`. `backend/app/services/execution.py:_reconcile_uncertain` first reads back stored provider references. If verification cannot confirm the action, replay requires explicit acknowledgement.
+Only rate limits are retried. Ambiguous write timeouts are never retried in the initial execution path: `backend/app/services/execution.py:_with_retries` retries `RateLimitError` only, and `ExternalTimeoutError` immediately marks the execution `uncertain`. Competing workers are blocked by `_claim_execution`, an atomic conditional update that claims a `pending` or `failed` execution as `running` before dispatch. `_reconcile_uncertain` then reads stored provider references before any replay; unresolved cases require explicit acknowledgement.
 
 Trade-off: the system may stop for human review more often, but it avoids the worse failure of double-sending or double-writing.
 
