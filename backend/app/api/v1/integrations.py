@@ -20,8 +20,28 @@ def list_integrations(context=Depends(get_org_context), db: Session = Depends(ge
 
 
 @router.get("/{provider}/connect", response_model=ConnectResponse)
-def connect_integration(provider: str):
-    return integration_service.build_connect_response(provider)
+def connect_integration(
+    provider: str,
+    context=Depends(get_org_context),
+    db: Session = Depends(get_db),
+):
+    organization, user, _ = context
+    return integration_service.build_connect_response(db, provider, organization.id, user.id)
+
+
+@router.get("/{provider}/oauth/callback", response_model=IntegrationSchema)
+def oauth_callback(
+    provider: str,
+    state: str,
+    code: str | None = None,
+    error: str | None = None,
+    db: Session = Depends(get_db),
+):
+    if error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"OAuth provider returned an error: {error}")
+    if not code:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth callback is missing an authorization code")
+    return integration_service.complete_live_connection(db, provider, state, code)
 
 
 @router.get("/{provider}/callback", response_model=IntegrationSchema)

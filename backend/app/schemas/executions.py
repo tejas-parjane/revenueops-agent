@@ -2,7 +2,14 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
+from pydantic import BaseModel, Field
+
 from app.schemas.auth import ORMModel
+
+
+class ExecutionRetryRequest(BaseModel):
+    acknowledge_uncertain: bool = False
+    note: str | None = Field(default=None, max_length=1000)
 
 
 class ExecutionSchema(ORMModel):

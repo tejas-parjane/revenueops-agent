@@ -15,6 +15,7 @@ from app.models.entities import (
     OrganizationMember,
     Recommendation,
 )
+from app.schemas.actions import assert_action_targets_lead, validate_action_payload
 from app.schemas.agent import RecommendationSchema
 from app.schemas.approvals import ApprovalActionRequest, ApprovalDetailSchema, ApprovalRejectRequest
 from app.schemas.executions import ExecutionSchema
@@ -46,7 +47,12 @@ def _load_approval(
         select(Approval, Recommendation, Lead)
         .join(Recommendation, Recommendation.id == Approval.recommendation_id)
         .join(Lead, Lead.id == Recommendation.lead_id)
-        .where(Approval.id == approval_id, Approval.organization_id == organization_id)
+        .where(
+            Approval.id == approval_id,
+            Approval.organization_id == organization_id,
+            Recommendation.organization_id == organization_id,
+            Lead.organization_id == organization_id,
+        )
     ).first()
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Approval not found")
@@ -71,12 +77,28 @@ def _detail(db: Session, approval: Approval, recommendation: Recommendation, lea
     )
 
 
+def _validated_action(action: dict[str, Any] | None, lead: Lead) -> dict[str, Any]:
+    try:
+        normalized = validate_action_payload(action)
+        assert_action_targets_lead(normalized, lead.id, lead.email, lead.external_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+    return normalized
+
+
 def list_approvals(db: Session, organization_id: UUID) -> list[ApprovalDetailSchema]:
     rows = db.execute(
         select(Approval, Recommendation, Lead)
         .join(Recommendation, Recommendation.id == Approval.recommendation_id)
         .join(Lead, Lead.id == Recommendation.lead_id)
-        .where(Approval.organization_id == organization_id)
+        .where(
+            Approval.organization_id == organization_id,
+            Recommendation.organization_id == organization_id,
+            Lead.organization_id == organization_id,
+        )
         .order_by(Approval.created_at.desc())
     ).all()
     return [_detail(db, approval, recommendation, lead) for approval, recommendation, lead in rows]
@@ -92,9 +114,10 @@ def approve(
     approval, recommendation, lead = _load_approval(db, organization_id, approval_id)
     _assert_approver(db, organization_id, user_id)
 
+    now = utcnow()
     if approval.status != "pending":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Approval is no longer pending")
-    if as_utc(approval.expires_at) <= utcnow():
+    if (as_utc(approval.expires_at) or now) <= now:
         approval.status = "expired"
         db.commit()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Approval has expired")
@@ -106,28 +129,27 @@ def approve(
             detail="Proposed action changed before approval",
         )
 
-    action: dict[str, Any] = dict(approval.action_payload or {})
+    original = _validated_action(dict(approval.action_payload or {}), lead)
+    if action_hash(original) != current_hash:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Stored action could not be verified",
+        )
+
+    action = original
+    new_hash = current_hash
     if payload.edited_payload is not None:
-        edited = payload.edited_payload
-        if not isinstance(edited.get("type"), str) or not edited.get("type"):
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Action type is required")
-        if str(edited.get("lead_id") or "") != str(lead.id):
+        edited = _validated_action(payload.edited_payload, lead)
+        if edited.get("type") != original.get("type") or edited.get("provider") != original.get("provider"):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Edited action must target the same lead",
-            )
-        if edited.get("external_id") and edited.get("external_id") != action.get("external_id"):
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Edited action must target the same external record",
+                detail="Edited action cannot change type or provider",
             )
         action = edited
         new_hash = action_hash(action)
         approval.action_payload = action
         approval.action_hash = new_hash
         recommendation.proposed_action = action
-    else:
-        new_hash = current_hash
 
     provider = str(action.get("provider") or "hubspot")
     integration = db.scalar(

@@ -8,6 +8,7 @@ import {
   CardHeader,
   EmptyState,
   ErrorBanner,
+  JsonView,
   Spinner,
   StatusBadge,
   Table,
@@ -24,12 +25,28 @@ function isFailed(status: string): boolean {
   return value.includes('fail') || value.includes('error') || value === 'rejected';
 }
 
+function isUncertain(status: string): boolean {
+  return status.toLowerCase() === 'uncertain';
+}
+
+function verificationStatus(execution: Execution): string {
+  const response = execution.response_payload;
+  if (response && typeof response === 'object' && !Array.isArray(response)) {
+    const value = (response as { verified?: unknown }).verified;
+    if (value === true) return 'verified';
+    if (value === false) return 'unverified';
+  }
+  return 'not checked';
+}
+
 export default function Activity() {
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [executions, setExecutions] = useState<Execution[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [retryingId, setRetryingId] = useState<string | null>(null);
+  const [acknowledgingId, setAcknowledgingId] = useState<string | null>(null);
+  const [acknowledgementNote, setAcknowledgementNote] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -52,11 +69,16 @@ export default function Activity() {
     void load();
   }, [load]);
 
-  async function retry(execution: Execution) {
+  async function retry(execution: Execution, acknowledge = false) {
     setRetryingId(execution.id);
     setError('');
     try {
-      await api.post(`/executions/${execution.id}/retry`);
+      await api.post(`/executions/${execution.id}/retry`, {
+        acknowledge_uncertain: acknowledge,
+        note: acknowledge ? acknowledgementNote || null : null,
+      });
+      setAcknowledgingId(null);
+      setAcknowledgementNote('');
       await load();
     } catch (caught) {
       setError(errorMessage(caught));
@@ -130,6 +152,7 @@ export default function Activity() {
                     <TableHeader>Idempotency key</TableHeader>
                     <TableHeader>Executed</TableHeader>
                     <TableHeader>Status</TableHeader>
+                    <TableHeader>Verification</TableHeader>
                     <TableHeader>Error</TableHeader>
                     <TableHeader />
                   </TableRow>
@@ -143,6 +166,15 @@ export default function Activity() {
                       <TableCell className="max-w-[160px] truncate font-mono text-xs">{execution.idempotency_key}</TableCell>
                       <TableCell className="whitespace-nowrap">{formatDateTime(execution.executed_at)}</TableCell>
                       <TableCell><StatusBadge status={execution.status} /></TableCell>
+                      <TableCell>
+                        <StatusBadge status={verificationStatus(execution)} />
+                        {execution.response_payload ? (
+                          <details className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                            <summary className="cursor-pointer">Response</summary>
+                            <JsonView value={execution.response_payload} className="mt-1 max-h-32" />
+                          </details>
+                        ) : null}
+                      </TableCell>
                       <TableCell className="max-w-[240px]">
                         {execution.error_message ? (
                           <span className="text-xs text-rose-600 dark:text-rose-400">{execution.error_message}</span>
@@ -159,6 +191,43 @@ export default function Activity() {
                           >
                             Retry
                           </Button>
+                        ) : null}
+                        {isUncertain(execution.status) && acknowledgingId !== execution.id ? (
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            onClick={() => {
+                              setAcknowledgingId(execution.id);
+                              setAcknowledgementNote('');
+                            }}
+                          >
+                            Verify &amp; retry
+                          </Button>
+                        ) : null}
+                        {acknowledgingId === execution.id ? (
+                          <div className="space-y-2">
+                            <textarea
+                              value={acknowledgementNote}
+                              onChange={(event) => setAcknowledgementNote(event.target.value)}
+                              rows={2}
+                              placeholder="Verified manually in the external system"
+                              className="input-field text-xs"
+                              aria-label={`Acknowledgement note for ${execution.id}`}
+                            />
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                size="sm"
+                                variant="primary"
+                                loading={retryingId === execution.id}
+                                onClick={() => void retry(execution, true)}
+                              >
+                                Confirm retry
+                              </Button>
+                              <Button size="sm" onClick={() => setAcknowledgingId(null)}>
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
                         ) : null}
                       </TableCell>
                     </TableRow>

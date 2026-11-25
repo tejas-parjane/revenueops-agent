@@ -16,3 +16,6 @@ class AgentState(TypedDict, total=False):
     reasoning_summary: str
     result: dict[str, Any]
     error: str
+    agent_mode: str
+    model: str | None
+    tool_trace: list[dict[str, Any]]

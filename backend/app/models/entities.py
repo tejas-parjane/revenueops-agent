@@ -84,6 +84,24 @@ class Integration(Base):
     )
 
 
+class OAuthState(Base):
+    __tablename__ = "oauth_states"
+    __table_args__ = (
+        UniqueConstraint("state_hash", name="uq_oauth_states_state_hash"),
+        Index("ix_oauth_states_org_provider_expires", "organization_id", "provider", "expires_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    organization_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id"))
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    provider: Mapped[str] = mapped_column(String(64))
+    state_hash: Mapped[str] = mapped_column(String(64))
+    redirect_uri: Mapped[str] = mapped_column(String(512))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class Lead(Base):
     __tablename__ = "leads"
     __table_args__ = (
@@ -92,6 +110,7 @@ class Lead(Base):
         ),
         Index("ix_leads_org_activity", "organization_id", "last_activity_at"),
         Index("ix_leads_org_stage", "organization_id", "stage"),
+        Index("ix_leads_org_email", "organization_id", "email"),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)

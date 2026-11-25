@@ -33,6 +33,7 @@ export interface Integration {
   provider: string;
   external_account_id: string | null;
   connection_status: string;
+  mode: 'mock' | 'live';
   last_synced_at: string | null;
   last_error: string | null;
   permissions: string[];
@@ -176,6 +177,7 @@ export interface IntegrationConnectResponse {
   authorization_url: string;
   state: string;
   callback_url: string;
+  mode: 'mock' | 'live';
 }
 
 export interface LeadImportResponse {

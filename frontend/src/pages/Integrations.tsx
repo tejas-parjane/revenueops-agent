@@ -10,6 +10,21 @@ const providers = [
   { key: 'google_sheets', name: 'Google Sheets', description: 'Spreadsheet imports and exports', initial: 'S', color: 'bg-emerald-500' },
 ] as const;
 
+function statusMessage(integration: Integration | undefined): string | null {
+  if (!integration) return null;
+  const status = integration.connection_status.toLowerCase();
+  if (status === 'expired') {
+    return integration.last_error || 'OAuth credentials expired. Reconnect this provider.';
+  }
+  if (status === 'disconnected') {
+    return 'This provider is disconnected. Reconnect to resume syncing.';
+  }
+  if (status === 'error') {
+    return integration.last_error || 'The last sync failed. Retry or reconnect this provider.';
+  }
+  return integration.last_error;
+}
+
 export default function Integrations() {
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,6 +52,10 @@ export default function Integrations() {
     setError('');
     try {
       const connection = await api.get<IntegrationConnectResponse>(`/integrations/${providerKey}/connect`);
+      if (connection.mode === 'live') {
+        window.location.assign(connection.authorization_url);
+        return;
+      }
       const externalAccountId = `mock-${providerKey}-${Date.now()}`;
       const query = new URLSearchParams({
         state: connection.state,
@@ -123,11 +142,22 @@ export default function Integrations() {
                     </span>
                   </div>
                   <div className="flex justify-between gap-3">
+                    <span className="text-slate-400">Mode</span>
+                    <Badge tone={integration?.mode === 'live' ? 'emerald' : 'neutral'}>
+                      {integration?.mode === 'live' ? 'Live OAuth' : 'Mock data'}
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between gap-3">
                     <span className="text-slate-400">Account</span>
                     <span className="max-w-[160px] truncate text-right font-mono text-slate-600 dark:text-slate-300">
                       {integration?.external_account_id ?? '—'}
                     </span>
                   </div>
+                  {statusMessage(integration) ? (
+                    <p className="rounded-md bg-amber-50 p-2 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+                      {statusMessage(integration)}
+                    </p>
+                  ) : null}
                   <div>
                     <p className="mb-1.5 text-slate-400">Permissions</p>
                     <div className="flex flex-wrap gap-1">

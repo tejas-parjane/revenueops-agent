@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.agent.graph import build_graph
 from app.agent.state import AgentState
+from app.core.config import settings
 from app.core.time import utcnow
 from app.db.session import SessionLocal
 from app.models.entities import AgentTask, AgentTaskEvent, Recommendation
@@ -170,6 +171,9 @@ def run_task_sync(task_id: str) -> None:
             "findings": [],
             "recommendations": [],
             "data_sources": [],
+            "agent_mode": settings.agent_mode,
+            "model": settings.llm_model if settings.agent_mode == "llm" else None,
+            "tool_trace": [],
         }
         build_graph().invoke(state)
         db.commit()

@@ -55,7 +55,7 @@ def register_user(db: Session, payload: RegisterRequest) -> TokenResponse:
                 provider=provider,
                 external_account_id=f"mock-{provider}-{organization.id.hex[:8]}",
                 encrypted_credentials=encrypt_credentials(
-                    {"mock": True, "connected_at": utcnow().isoformat()}
+                    {"mock": True, "mode": "mock", "connected_at": utcnow().isoformat()}
                 ),
                 connection_status="connected",
                 permissions=metadata["permissions"],

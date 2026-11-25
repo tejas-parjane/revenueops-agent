@@ -1,6 +1,6 @@
 # RevenueOps Agent
 
-Full-stack MVP scaffold for evidence-backed revenue operations investigation with human approval before external actions.
+Full-stack application for evidence-backed revenue operations investigation with human approval before external actions.
 
 ## URLs
 
@@ -9,9 +9,25 @@ Full-stack MVP scaffold for evidence-backed revenue operations investigation wit
 - API docs: http://localhost:8000/docs
 - Health check: http://localhost:8000/health
 
+Current deployed demo:
+
+- Frontend: `https://frontend-eight-kappa-mvu9los0gx.vercel.app/`
+- API: `https://revenueops-api-8iwn.onrender.com/api/v1`
+- Health: `https://revenueops-api-8iwn.onrender.com/health`
+
+## Modes
+
+- `INTEGRATION_MODE=mock`: seeded demo adapters; no external calls.
+- `INTEGRATION_MODE=live`: real OAuth and provider APIs; credentials required.
+- `INTEGRATION_MODE=auto`: live when provider credentials are configured, otherwise mock.
+- `AGENT_MODE=deterministic`: rule-based agent, used by tests and CI.
+- `AGENT_MODE=llm`: optional LLM-assisted classification and action copy, with strict validation and deterministic fallback.
+
+See `docs/INTEGRATION_SETUP.md` for OAuth and provider setup.
+
 ## Login details
 
-There is no pre-seeded demo account. Create one from the registration page, then sign in with the same email and password.
+The deployed demo has a pre-created account. Local and fresh deployments require registration. Create an account from the registration page, then sign in with the same email and password.
 
 Open http://localhost:5173/register and use:
 
@@ -175,3 +191,20 @@ vercel --prod
 ```
 
 `frontend/api/[...path].js` forwards browser requests from `/api/*` to `${BACKEND_URL}/api/*`, so the frontend uses same-origin API URLs and does not expose the Render URL to the browser.
+
+Set optional provider/LLM variables in Render using `.env.example` as the checklist. `INTEGRATION_MODE` and `AGENT_MODE` default to `auto` and `deterministic`.
+
+### Current deployment limitations
+
+- `revenueops-worker` is defined but not deployed because the Render free plan rejects worker services.
+- Production uses `CELERY_TASK_ALWAYS_EAGER=false`; without a worker, queued executions do not run. Upgrade the worker plan or run a worker before relying on queued actions.
+- Vercel Git auto-connect is blocked by GitHub app permissions. Deploy manually with `vercel --prod` until access is fixed.
+- Vercel needs `BACKEND_URL` and `NODEJS_HELPERS=0`; the current public demo domain has deployment protection disabled.
+
+## Documentation
+
+- `docs/ARCHITECTURE.md`: architecture, request flow, modes, and safety boundaries.
+- `docs/IMPLEMENTATION_PLAN.md`: implementation phases and acceptance criteria.
+- `docs/IMPLEMENTATION_PROGRESS.md`: completed work and verification results.
+- `docs/INTEGRATION_SETUP.md`: OAuth credentials and provider setup.
+- `docs/AGENT_EVALUATION.md`: evaluation cases and scoring.

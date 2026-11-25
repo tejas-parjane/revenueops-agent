@@ -18,6 +18,15 @@ import type { AgentEvent, Task, TaskDetail } from '../types';
 const DEFAULT_PROMPT = 'Find all high-value leads that haven\'t received a follow-up in 48 hours.';
 const FINAL_STATUSES = ['completed', 'failed', 'cancelled', 'canceled', 'error'];
 
+function resultField(task: TaskDetail | null, key: string): unknown {
+  if (!task?.result || typeof task.result !== 'object' || Array.isArray(task.result)) return null;
+  return (task.result as Record<string, unknown>)[key] ?? null;
+}
+
+function textField(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value : null;
+}
+
 export default function AgentWorkspace() {
   const [searchParams, setSearchParams] = useSearchParams();
   const taskParam = searchParams.get('task');
@@ -131,6 +140,10 @@ export default function AgentWorkspace() {
                   <p className="section-title">Task {taskId.slice(0, 8)}</p>
                   {task ? <StatusBadge status={task.status} /> : <Badge tone="sky">Loading</Badge>}
                   {running ? <Badge tone="violet">Live</Badge> : null}
+                  {task ? <Badge tone="sky">{titleCase(textField(resultField(task, 'agent_mode')) ?? 'deterministic')}</Badge> : null}
+                  {textField(resultField(task, 'model')) ? (
+                    <Badge tone="neutral">{textField(resultField(task, 'model'))}</Badge>
+                  ) : null}
                 </div>
                 <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{task?.user_request ?? 'Retrieving task…'}</p>
               </div>
@@ -166,6 +179,12 @@ export default function AgentWorkspace() {
                   <div className="lg:col-span-2">
                     <p className="label-field">Result</p>
                     <JsonView value={task.result} />
+                  </div>
+                ) : null}
+                {Array.isArray(resultField(task, 'tool_trace')) ? (
+                  <div className="lg:col-span-2">
+                    <p className="label-field">Tool trace</p>
+                    <JsonView value={resultField(task, 'tool_trace')} className="max-h-48" />
                   </div>
                 ) : null}
                 {task.error ? (

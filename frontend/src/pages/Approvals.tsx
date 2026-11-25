@@ -11,15 +11,26 @@ import {
   Spinner,
   StatusBadge,
 } from '../components/UI';
-import type { ApprovalDetail } from '../types';
+import type { ApprovalDetail, Execution } from '../types';
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function stringValue(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value : null;
+}
+
+function actionOf(approval: ApprovalDetail): Record<string, unknown> {
+  return asRecord(approval.recommendation?.proposed_action);
+}
 
 function actionTypeOf(approval: ApprovalDetail): string {
-  const proposed = approval.recommendation?.proposed_action;
-  if (proposed && typeof proposed === 'object' && 'action_type' in proposed) {
-    const value = (proposed as { action_type: unknown }).action_type;
-    if (typeof value === 'string') return titleCase(value);
-  }
-  return 'Proposed Action';
+  const action = actionOf(approval);
+  const value = stringValue(action.type) ?? stringValue(action.action_type);
+  return value ? titleCase(value) : 'Proposed Action';
 }
 
 function isPending(status: string): boolean {
@@ -29,6 +40,7 @@ function isPending(status: string): boolean {
 
 export default function Approvals() {
   const [approvals, setApprovals] = useState<ApprovalDetail[]>([]);
+  const [executions, setExecutions] = useState<Execution[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionError, setActionError] = useState('');
@@ -41,7 +53,12 @@ export default function Approvals() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setApprovals(await api.get<ApprovalDetail[]>('/approvals'));
+      const [items, runs] = await Promise.all([
+        api.get<ApprovalDetail[]>('/approvals'),
+        api.get<Execution[]>('/executions'),
+      ]);
+      setApprovals(items);
+      setExecutions(runs);
       setError('');
     } catch (caught) {
       setError(errorMessage(caught));
@@ -89,7 +106,7 @@ export default function Approvals() {
     try {
       await api.post(`/approvals/${approval.id}/approve`, {
         edited_payload: editedPayload,
-        expected_hash: null,
+        expected_hash: approval.action_hash,
         note: null,
       });
       setEditingId(null);
@@ -137,6 +154,11 @@ export default function Approvals() {
             const canAct = isPending(approval.status);
             const lead = approval.lead;
             const recommendation = approval.recommendation;
+            const action = actionOf(approval);
+            const provider = stringValue(action.provider);
+            const execution = executions.find(
+              (item) => item.recommendation_id === approval.recommendation_id,
+            );
 
             return (
               <Card key={approval.id} className="overflow-hidden">
@@ -148,6 +170,7 @@ export default function Approvals() {
                       <Badge tone={approval.risk_level.toLowerCase() === 'low' ? 'emerald' : approval.risk_level.toLowerCase() === 'high' ? 'rose' : 'amber'}>
                         {titleCase(approval.risk_level)} risk
                       </Badge>
+                      {provider ? <Badge tone="sky">{titleCase(provider)}</Badge> : null}
                     </div>
                     <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                       Created {formatDateTime(recommendation.created_at)} · Expires {formatDateTime(approval.expires_at)}
@@ -165,6 +188,9 @@ export default function Approvals() {
                         <p className="text-xs text-slate-500 dark:text-slate-400">
                           {lead.company ?? 'No company'} · {titleCase(lead.stage)} · ${lead.deal_value.toLocaleString()}
                         </p>
+                        {lead.email ? (
+                          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{lead.email}</p>
+                        ) : null}
                       </div>
                       <StatusBadge status={lead.priority} />
                     </div>
@@ -194,6 +220,24 @@ export default function Approvals() {
                     {approval.approved_by ? ` · Approved by ${approval.approved_by}` : ''}
                     {approval.note ? ` · Note: ${approval.note}` : ''}
                   </div>
+
+                  {execution ? (
+                    <div className="rounded-md border border-slate-200 p-3 dark:border-slate-800">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="label-field">Execution result</p>
+                        <StatusBadge status={execution.status} />
+                      </div>
+                      <p className="mt-1 font-mono text-[10px] text-slate-400">
+                        Idempotency key {execution.idempotency_key}
+                      </p>
+                      {execution.error_message ? (
+                        <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{execution.error_message}</p>
+                      ) : null}
+                      {execution.response_payload ? (
+                        <JsonView value={execution.response_payload} className="mt-2 max-h-32" />
+                      ) : null}
+                    </div>
+                  ) : null}
 
                   {editingId === approval.id ? (
                     <div>
