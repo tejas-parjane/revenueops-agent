@@ -67,7 +67,7 @@ From `backend/`:
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-python -m pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt
 ```
 
 Set the environment values for your database, broker, secrets, CORS origin, and modes. Then run:

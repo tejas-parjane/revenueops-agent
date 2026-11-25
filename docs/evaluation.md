@@ -7,7 +7,7 @@ The evaluation suite checks deterministic reasoning and action proposals without
 From `backend/`:
 
 ```bash
-python -m pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt
 python -m pytest -q
 ```
 

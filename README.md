@@ -96,7 +96,7 @@ For non-Docker setup, provider setup, and environment variables, see `docs/setup
 From `backend/`:
 
 ```bash
-python -m pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt
 python -m ruff check .
 python -m pytest -q
 ```
